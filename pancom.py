@@ -54,7 +54,11 @@ class PanOsDevice(object):
         self.package = package
         self.path = self.PACKAGE[package]
         self.verbose = verbose
+        self.cert_verify = False
         self.panxapi = pan.xapi.PanXapi(hostname=hostname, api_key=apikey, timeout=timeout)
+        if not self.cert_verify: self.context = ssl._create_unverified_context()
+        else: self.context = ssl._create_default_https_context()
+
 
     def upload_to_device(self,file):
         # Compere version to install with version currently installed.
@@ -86,23 +90,19 @@ class PanOsDevice(object):
             logging.debug(log_message)
             log_message = "API request: %s" % (api_call)
             logging.debug(log_message)
-            ctx = ssl._create_unverified_context()
-            #opener = register_openers()
-            ##### Need to find alternativ method...not recommended...!!!!
-            #ssl._create_default_https_context = ssl._create_unverified_context
-            #####
             # Use multipart_encode to encode file and generate headers.
             datagen, headers = multipart_encode({"file": f})
-            # Open URL
-            request = urllib2.Request(api_call, datagen, headers)
+            data =str().join(datagen)  # Data must be a string
+            # Generate request
+            request = urllib2.Request(api_call, data, headers)
             try:
-                response = urllib2.urlopen(request, context=ctx, timeout=self.timeout).read()
+                response = urllib2.urlopen(request, context=self.context, timeout=self.timeout).read()
             except Exception:
                 logging.error("Error while uploading %s to %s" % (file, self.hostname))
                 logging.error(traceback.format_exc())
                 if self.verbose:
                     log_message = "Error while uploading %s to %s" % (file, self.hostname)
-                    if verbose: print log_message
+                    if self.verbose: print log_message
                     logging.error(log_message)
                 os.chdir( currentdir )
                 f.close()
