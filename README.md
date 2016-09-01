@@ -1,4 +1,4 @@
-#pan_dyn-update
+#pan-dyn-update
 Install dynamic updates on Palo Alto Networks firewalls and Panorama
 
 Checks and finds for newest update file in subfolders panupv2-all-apps,
