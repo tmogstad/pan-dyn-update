@@ -1,7 +1,7 @@
 #pan-dyn-update
 Install dynamic updates on Palo Alto Networks firewalls and Panorama
 
-Checks and finds for newest update file in subfolders panupv2-all-apps,
+Finds the latest dynamic update file in subfolders panupv2-all-apps,
 panupv2-all-contents,panup-all-antivirus, panup-all-wfmeta, panupv2-all-wildfire
 and panup-all-wildfire. Installs latest update on devices defined in devices.conf if needed.
 
@@ -13,15 +13,16 @@ pip install poster
 pip install bs4
 pip install lxml
 ```
-##Run setup.sh to make directories 
+##Run setup.sh to make required directories 
 ```
 chmod +x ./setup.sh
 ./setup.sh
 ```
 ###Install pan-python from https://github.com/kevinsteves/pan-python
+Script uses pan.xapi to make and send XML API requests to the firewalls
 
 ##Configuration
-Two files needs to be modified to run the script.
+Two configuration files needs to be modified before running the script.
 
 In config.conf, the API-key must be configured, and optionally smtp settings for sending results with e-mail
 ```
