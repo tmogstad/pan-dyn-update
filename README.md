@@ -5,6 +5,11 @@ Finds the latest dynamic update file in subfolders panupv2-all-apps,
 panupv2-all-contents,panup-all-antivirus, panup-all-wfmeta, panupv2-all-wildfire
 and panup-all-wildfire. Installs latest update on devices defined in devices.conf if needed.
 
+Script can be used in scenarios where downloading dynamic updates directly from the internett is not an option.
+
+Script requires update files to already be located in subfolders on the server where the script is executed.
+To automatically download the latest dynamic updates, the following script can be used: https://github.com/btorresgil/content_downloader
+
 ##Installation instructions
 Install instructions are for linux only.
 ###Install the following repositories (using pip or method):
@@ -55,8 +60,8 @@ When running the script "-t contenttype" is mandatory. Supported values are:
 * appthreat - Content updates with apps and threats
 * app - Content updates with only apps
 * antivirus - Antivirus update
-* wildfire - Wildfire updates for PAN-OS 7.0.x and lower
-* wildfire2 - Wildfire updates for PAN-IS 7.1.x and higher
+* wildfire - Wildfire updates for PAN-OS 7.0 and lower
+* wildfire2 - Wildfire updates for PAN-IS 7.1 and higher
 * wf500 - WF-500 Content
 
 Other optional arguments:
