@@ -5,7 +5,7 @@ Checks and finds for newest update file in subfolders panupv2-all-apps,
 panupv2-all-contents,panup-all-antivirus, panup-all-wfmeta, panupv2-all-wildfire
 and panup-all-wildfire. Installs latest update on devices defined in devices.conf if needed.
 
-##Install
+##Installation instructions
 Install instructions are for linux only.
 ###Install the following repositories (using pip or method):
 ```
