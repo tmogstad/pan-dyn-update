@@ -10,6 +10,8 @@ Script can be used in scenarios where downloading dynamic updates directly from 
 Script requires update files to already be located in subfolders on the server where the script is executed.
 To automatically download the latest dynamic updates, the following script can be used: https://github.com/btorresgil/content_downloader
 
+To move files from download folder to folders used by this script, the following script can be used: https://github.com/tmogstad/copy-and-cleanup
+
 ##Installation instructions
 Install instructions are for linux only.
 ###Install the following repositories (using pip or method):
