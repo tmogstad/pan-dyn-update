@@ -1,5 +1,29 @@
 #!/usr/bin/env python
 
+#Copyright (c) 2016 Data Equipment AS
+#Author: Tor Mogstad <torm _AT_ dataequipment.no>
+
+#Permission is hereby granted, free of charge, to any person obtaining a copy
+#of this software and associated documentation files (the "Software"), to deal
+#in the Software without restriction, including without limitation the rights
+#to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+#copies of the Software, and to permit persons to whom the Software is
+#furnished to do so, subject to the following conditions:
+
+#The above copyright notice and this permission notice shall be included in all
+#copies or substantial portions of the Software.
+
+#THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+#IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+#FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+#AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+#LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+#OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+#SOFTWARE.
+
+
+
+
 """Install dynamic updates on Palo Alto Networks firewalls and Panorama
 
 Checks and finds for newest update file in subfolders panupv2-all-apps,
@@ -26,9 +50,9 @@ import traceback
 
 ##### Static variables used in script - change only if needed
 CONFIG_FILE = "config.conf"  # Config file
-DEVICES_FILE = "devices.conf"  # Devices file (need to use -f arguemtn
+DEVICES_FILE = "devices.conf"  # Devices file
 LOG_FILE = "log.txt"  # Log file used by script
-API_TIMEOUT = 600  # API timeout - used when doing API calls and file uploads
+API_TIMEOUT = 60  # API timeout - used when doing API calls and file uploads
 
 # List of supported content types
 PACKAGE = {
@@ -54,7 +78,8 @@ def find_newest_file(package):
         filename = newest.split('/')[-1]
         return filename
     except:
-        log_message = "Error checking for newest content file. Check if directorys ./content/ ./apps/ ./antivirus/ and ./wildfire/ exists, and that files exits"
+        log_message = """Error checking for newest content file. Check if directorys ./panupv2-all-contents, ./panupv2-all-apps,
+                        ./panupv2-all-apps, ./panup-all-wildfire, panupv2-all-wildfire  and ./panupv2-all-wildfire exists, and that files exits"""
         logging.error(log_message)
         logging.error(traceback.format_exc())
         print log_message

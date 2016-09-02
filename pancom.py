@@ -1,4 +1,25 @@
 # -*- coding: utf-8 -*-
+#Copyright (c) 2016 Data Equipment AS
+#Author: Tor Mogstad <torm _AT_ dataequipment.no>
+
+#Permission is hereby granted, free of charge, to any person obtaining a copy
+#of this software and associated documentation files (the "Software"), to deal
+#in the Software without restriction, including without limitation the rights
+#to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+#copies of the Software, and to permit persons to whom the Software is
+#furnished to do so, subject to the following conditions:
+
+#The above copyright notice and this permission notice shall be included in all
+#copies or substantial portions of the Software.
+
+#THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+#IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+#FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+#AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+#LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+#OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+#SOFTWARE.
+
 """ Module for PAN-OS communication
 
 Module consist of two classes.
@@ -40,6 +61,7 @@ class PanOsDevice(object):
         if package == "wildfire2": self.type = "wildfire"
         elif package == "app": self.type = "content"
         elif package == "appthreat": self.type = "content"
+        elif package == "antivirus": self.type = "anti-virus"
         else: self.type = package
         self.hostname = hostname
         self.username = None
@@ -117,7 +139,7 @@ class PanOsDevice(object):
         if self.verbose: print "Starting install of %s on %s" % (file, self.name)
         xpath = "<request><%s><upgrade><install><file>%s</file></install></upgrade></%s></request>" % (self.type, file, self.type)
         # Timeout for while loop - used if wait is true
-        whiletimeout = time.time() + waittimeout
+        whiletimeout = time.time() + self.timeout
         try:
             self.panxapi.op(xpath)
             result = self.panxapi.xml_root()
@@ -144,6 +166,7 @@ class PanOsDevice(object):
             if status == "FIN":
                 if self.verbose: print "Install job completed on %s." % (self.name)
                 if self.type == "wildfire": return True  # No additional job started on wildfire install
+                elif self.type == "anti-virus": return True # No additional job started on antivirus install
                 nextjobid = xmlreader.findnextjobid()
                 # Monitor status of next job (content install job)
                 while True:
