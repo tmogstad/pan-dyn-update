@@ -38,6 +38,8 @@ Use at your own risk.
 from poster.encode import multipart_encode
 from poster.streaminghttp import register_openers
 from pancom import PanOsDevice
+from pancom import UploadError
+from pancom import InstallError
 from parse import EmailSender
 import glob
 import sys
@@ -52,7 +54,8 @@ import traceback
 CONFIG_FILE = "config.conf"  # Config file
 DEVICES_FILE = "devices.conf"  # Devices file
 LOG_FILE = "log.txt"  # Log file used by script
-API_TIMEOUT = 60  # API timeout - used when doing API calls and file uploads
+# API timeout - also used when waiting for install job completion.
+API_TIMEOUT = 300 #For devices like PA-200/PA-500 this value needs to be increased.
 
 # List of supported content types
 PACKAGE = {
@@ -68,6 +71,11 @@ LOGLEVELS = {
 		"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"
 }
 
+class FileError(StandardError):
+    pass
+
+class ApiKeyException(StandardError):
+    pass
 
 def find_newest_file(package):
     try:
@@ -77,13 +85,12 @@ def find_newest_file(package):
         #Remove path from filename and return it
         filename = newest.split('/')[-1]
         return filename
-    except:
+    except Exception as e:
         log_message = """Error checking for newest content file. Check if directorys ./panupv2-all-contents, ./panupv2-all-apps,
                         ./panupv2-all-apps, ./panup-all-wildfire, panupv2-all-wildfire  and ./panupv2-all-wildfire exists, and that files exits"""
         logging.error(log_message)
         logging.error(traceback.format_exc())
-        print log_message
-        sys.exit(0)
+        raise FileError(e)
 
 
 def get_passed_arguments():
@@ -101,7 +108,12 @@ def parse_config_file(email,verbose):
     smtpuser = None
     smtppass = None
     smtpreceivers = []
-    object = open(CONFIG_FILE, "r")
+    try:
+        object = open(CONFIG_FILE, "r")
+    except Exception as e:
+        logging.error("Error opening config file")
+        logging.error(traceback.format_exc())
+        raise FileError(e)
     for i, line in enumerate(object):
         if not line.startswith("#"):
             type = line.split('=',1)[-2]
@@ -116,7 +128,7 @@ def parse_config_file(email,verbose):
             else:
                 log_message = "Error parsing config file at line %s" % (line.rstrip())
                 logging.error(log_message)
-                raise NameError(log_message)
+                raise FileError(log_message)
     object.close()
     if email:
         emailobj = EmailSender(smtpsender, smtpreceivers, smtphost, smtpport)
@@ -124,19 +136,18 @@ def parse_config_file(email,verbose):
             emailobj.smtpuser = smtpuser
             emailobj.smtppass = smtppass
     else: emailobj = None
-    try:
-        if apikey is None: raise ApiKeyException
-        return emailobj,apikey
-    except ApiKeyException:
-        log_message = "No API-KEY configured in config file"
-        logging.error(log_message)
-        print log_message
-        sys.exit()
+    if apikey is None: raise ApiKeyException("No API-KEY configued in config file")
+    return emailobj,apikey
 
 
 def parse_devices_file(apikey,verbose,package):
     fw_list = []
-    object = open(DEVICES_FILE, "r")
+    try:
+        object = open(DEVICES_FILE, "r")
+    except Exception as e:
+        logging.error("Error opening device file")
+        logging.error(traceback.format_exc())
+        raise FileError(e)
     for i, line in enumerate(object):
         if not line.startswith("#"):
             ip = line.split(',',1)[-2].rstrip()
@@ -146,8 +157,7 @@ def parse_devices_file(apikey,verbose,package):
     if not fw_list:
         log_message = "No devices in devices file(devices.conf). Please add firewalls there, or don't use -f"
         logging.error(log_message)
-        print fw_list
-        sys.exit()
+        raise FileError("log_message")
     return fw_list
 
 
@@ -220,24 +230,41 @@ def main():
     # Run through all devices found and install
     for device in device_list:
         # Check and set installed versions on device
-        device.check_installed_version()
+        try:
+            device_status = device.check_installed_version()
+        except UploadError as e:
+            log_message = "Timeout when checking current content versions for device %s. Skipping device" % (device.name)
+            statuslist.append(log_message)
+            logging.error(log_message)
+            logging.error(str(e))
+            device_status = False
+            pass
+        if not device_status: continue # go to next device if we could not check current versions on device
         # Upload file - status (true or false) returned. True is succesfull upload, false is skipped or failed.
-        status = device.upload_to_device(content_file)
+        try:
+            upload_status = device.upload_to_device(content_file)
+        except UploadError as e:
+            log_message = "Error while uploading %s to %s. Skipping device" % (content_file, device.hostname)
+            log.error(log_message)
+            statuslist.append(log_message)
         # Only run install if upload status is true (succesfull)
-        if status:
+        if upload_status:
             statuslist.append("SUCCESS: Upload of %s to %s - %s" % (content_file, device.hostname, device.name))
             # Argument w --wait determines if script should wait for completed install job
             if args.w: wait = True
             else: wait = False
             # Run install job
-            status2 = device.install_on_device(content_file, wait)
+            try:
+                install_status = device.install_on_device(content_file, wait)
+            except InstallError as e:
+                statuslist.append(str(e)) #If we get installerror - add it to statuslist
+                install_status = False
             # Store status messages based on result of install job
-            if status2 and wait: statuslist.append("SUCCESS: Installation of %s to %s - %s successfully completed" % (content_file, device.hostname, device.name))
-            elif status2 and not wait: statuslist.append("""SUCCESS: Installation of %s to %s - %s started.
+            if install_status and wait: statuslist.append("SUCCESS: Installation of %s to %s - %s successfully completed" % (content_file, device.hostname, device.name))
+            elif install_status and not wait: statuslist.append("""SUCCESS: Installation of %s to %s - %s started.
                                                         Did not wait for completion""" % (content_file, device.hostname, device.name))
-            else: statuslist.append("""FAILED: Installation of %s to %s - %s failed, or we timed out waiting for completion.
-                                    Please see script log file, and firewall logs for more details""" % (content_file, device.hostname, device.name))
-        else: statuslist.append("SKIPPED: Upload of %s to %s - %s. Installation skipped or failed for this device. Please see log file for more details" % (content_file, device.hostname, device.name))
+            else: statuslist.append("UNKNOWN: Installation of %s to %s - %s returned unknown status. Check logfile for more details" % (content_file, device.hostname, device.name))
+        else: statuslist.append("SKIPPED: Upload of %s to %s - %s. Content version we tried to install is the same or older as current version" % (content_file, device.hostname, device.name))
     # Print status messages to logfile, and/or prints them to stdout and sets email-content
     emailcontent = ""
     for status in statuslist:

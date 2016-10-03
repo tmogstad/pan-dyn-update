@@ -39,8 +39,12 @@ import urllib2
 import traceback
 import time
 
-# Wait time out - timeout when waiting for complettion of install jobs on FW in seconds
-waittimeout = 600
+
+class UploadError(StandardError):
+    pass
+
+class InstallError(StandardError):
+    pass
 
 ### Class for single PAN-OS Device
 
@@ -119,16 +123,10 @@ class PanOsDevice(object):
             request = urllib2.Request(api_call, data, headers)
             try:
                 response = urllib2.urlopen(request, context=self.context, timeout=self.timeout).read()
-            except Exception:
-                logging.error("Error while uploading %s to %s" % (file, self.hostname))
-                logging.error(traceback.format_exc())
-                if self.verbose:
-                    log_message = "Error while uploading %s to %s" % (file, self.hostname)
-                    if self.verbose: print log_message
-                    logging.error(log_message)
+            except Exception as e:
                 os.chdir( currentdir )
                 f.close()
-                return False  # Return false to indicate that upload failed
+                raise UploadError(e)
         f.close()
         os.chdir( currentdir )
         logging.debug("%s successfully uploaded to %s" % (file, self.name))
@@ -143,52 +141,78 @@ class PanOsDevice(object):
         try:
             self.panxapi.op(xpath)
             result = self.panxapi.xml_root()
-            # If wait is not set, return xml output
-            if not wait : return result
-            if self.verbose: print "Waiting for install job to complete on %s - will wait for max %s seconds" % (self.name, waittimeout)
+            # If wait is not set, we are done. False returned to indicate we did not wait
+            if not wait : return False
+            if self.verbose: print "Waiting for install job to complete on %s - will wait for max %s seconds" % (self.name, self.timeout)
             xmlreader = XmlReader(result)
             jobid = xmlreader.find_jobid()
+            cmd = 'show jobs id "%s"' % (jobid)
         except:
-            log_message = "Error running API command to install update on Panorama. Method 'install_to_panorama'"
-            print log_message
+            log_message = "Error running API command to install update on Panorama"
             logging.error(log_message)
-            sys.exit()
-        cmd = 'show jobs id "%s"' % (jobid)
+            logging.error(str(e))
+            raise InstallError(log_message)
         while True:
-            # cheks for completed job every 5 seconds
+            # cheks for completed job every 5 seconds. Exit if wait timeer is expired
+            if time.time() > whiletimeout:
+                log_message = "Timeout waiting for completetion of install job of %s on device %s. Command: %s" % (self.name, file, cmd)
+                logging.error(log_message)
+                raise InstallError(log_message)
             time.sleep(5)
-            self.panxapi.op(cmd=cmd, cmd_xml=True)
-            output = self.panxapi.xml_result()
-            xmlreader = XmlReader(output)
-            status,progress = xmlreader.find_status()
+            try:
+                self.panxapi.op(cmd=cmd, cmd_xml=True)
+                output = self.panxapi.xml_result()
+            except Exception as e:
+                logging.error(str(e))
+                raise InstallError("Error when executing API call to find job status for firewall %s. Command: %s" % (self.name, cmd))
+            try:
+                xmlreader = XmlReader(output)
+                status,progress = xmlreader.find_status()
+            except:
+                raise InstallError("Error when parsing xml output to find job status for device %s. Output: %s" % (self.name, output))
             if self.verbose: print "Install job running on %s - Status : %s %s%%" % (self.name, status, progress)
             # when job statis is "FIN" - continue
             if status == "FIN":
                 if self.verbose: print "Install job completed on %s." % (self.name)
-                if self.type == "wildfire": return True  # No additional job started on wildfire install
-                elif self.type == "anti-virus": return True # No additional job started on antivirus install
-                nextjobid = xmlreader.findnextjobid()
+                try:
+                    nextjobid = xmlreader.findnextjobid()
+                except:
+                    logging.info("Next job id not found when in response from job %s on fw %s. Installation succeeded." % (jobid, self.name))
+                    return True # exception here means there is no new job started, and installation suceeded.
                 # Monitor status of next job (content install job)
                 while True:
-                    # Check every 5 seconds
-                    time.sleep(5)
                     cmd2 = 'show jobs id "%s"' % (nextjobid)
-                    self.panxapi.op(cmd=cmd2, cmd_xml=True)
-                    output2 = self.panxapi.xml_result()
-                    xmlreader2 = XmlReader(output2)
-                    status2,progress2 = xmlreader2.find_status()
+                    # cheks for completed job every 5 seconds. Exit if wait timeer is expired
+                    if time.time() > whiletimeout:
+                        log_message = "Timeout waiting for completetion of install job of %s on device %s. Command: %s" % (self.name, file, cmd2)
+                        log.error(log_message)
+                        raise InstallError(log_message)
+                    time.sleep(5)
+                    try:
+                        self.panxapi.op(cmd=cmd2, cmd_xml=True)
+                        output2 = self.panxapi.xml_result()
+                    except Exception as e:
+                        logging.error(str(e))
+                        raise InstallError("Error when executing API call to find job status for firewall %s. Install job might not be necessary or failed. Command: %s" % (self.name, cmd2))
+                    try:
+                        xmlreader2 = XmlReader(output2)
+                        status2,progress2 = xmlreader2.find_status()
+                    except:
+                        raise InstallError("Error when parsing xml output to find job status for device %s. Output: %s" % (self.name, output))
                     if self.verbose: print "%s job is running on %s - Status: %s %s%%" % (type,self.name,status2,progress2)
                     # When status is FIN - job is completed successfully
                     if status2 == "FIN":
                         if self.verbose: print "%s job is done on %s" % (type, self.name)
                         return True
-                    if time.time() > whiletimeout: return False  # Exits loop by returning false when timeout is reached for content install job
-            if time.time() > whiletimeout: return False  # Exits loop by returning false when timeout is reached for first install job
 
 
     def check_installed_version(self):
         cmd = "show system info"
-        self.panxapi.op(cmd=cmd,cmd_xml=True)
-        output = self.panxapi.xml_root()
-        reader = XmlReader(output)
-        self.app_version,self.threat_version,self.av_version,self.wf_version = reader.find_content_versions()
+        try:
+            self.panxapi.op(cmd=cmd,cmd_xml=True)
+            output = self.panxapi.xml_root()
+            reader = XmlReader(output)
+            self.app_version,self.threat_version,self.av_version,self.wf_version = reader.find_content_versions()
+            return True
+        except pan.xapi.PanXapiError as e:
+            raise UploadError(e)

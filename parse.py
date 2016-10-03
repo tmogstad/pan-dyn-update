@@ -38,6 +38,8 @@ import traceback
 # SMTP-config variables - set in config.conf
 smtpmessage_template = "This is an automatically generated e-mail. Script pan-dyn-update.py has performed the following task:\n"
 
+class SoupException(StandardError):
+    pass
 
 class XmlReader:
 	def __init__(self, content):
@@ -68,7 +70,7 @@ class XmlReader:
 			str = self.soup.find('nextjob').text
 			return str
 		except:
-			print "Couldn't find any matching item in method findnextjobid()"
+			raise SoupException("Couldn't find any matching item in method findnextjobid()")
 
 
 	def find_status(self):
